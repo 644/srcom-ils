@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Works For DMC3SE
+get_srcom_links(){
+	curl -s 'https://www.speedrun.com/api/v1/categories/02qp4ejd/variables' |\
+		jq -r '.data[] | .name, .id, .scope.level, (.values.values | to_entries[] | select(.value.label == "Dante Must Die") | .key)'
+}
+
+mk_mission_list(){
+	while IFS= read -r name; do
+		read -r id
+		read -r level
+		read -r difficulty
+		echo "${name% *}" "https://www.speedrun.com/api/v1/leaderboards/nj1n3ydp/level/${level}/02qp4ejd?var-${id}=${difficulty}"
+	done < <(get_srcom_links)
+}
+
+mk_parallel_req(){
+	mission=${1% *}
+	while IFS= read -r youtubeurl; do
+		youtube-dl -q --restrict-filenames --no-playlist -o "${mission}-%(id)s.%(ext)s" -- "${youtubeurl}"
+	done < <(curl -s "${1#* }" | jq -r '.data.runs[] | select(.place == 1) | .run.videos.links[].uri')
+}
+
+export -f mk_parallel_req
+
+mk_mission_list | parallel --bar -k 'mk_parallel_req {}'
